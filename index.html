@@ -75,7 +75,7 @@
     #output {
       font-weight: bold;
       text-align: center;
-      margin: 18px 12px 6px;
+      margin: 18px 12px 10px;
       word-break: break-word;
       z-index: 1;
       font-size: clamp(22px, 7.5vw, 46px);
@@ -83,19 +83,17 @@
       max-width: var(--maxw);
     }
 
-    /* Source tag under output */
-    #sourceTag {
-      display: none;
-      font-size: 12px;
-      color: #fff;
-      background: #1a1a1a;
-      border: 1px solid #333;
-      border-radius: 9999px;
-      padding: 4px 10px;
-      margin: 4px 0 8px;
-      text-align: center;
-      max-width: var(--maxw);
-    }
+    /* Colored word chips (inline) */
+    .wA { color:#2ecc71; }
+    .wB { color:#3498db; }
+    .wC { color:#e67e22; }
+    .wD { color:#9b59b6; }
+    .wE { color:#e74c3c; }
+    .wF { color:#1abc9c; }
+    .wG { color:#f1c40f; }
+    .wH { color:#95a5a6; }
+    .wI { color:#ff6b6b; }
+    .wJ { color:#bdc3c7; }
 
     /* Inline audio status (always visible) */
     #audioStatus {
@@ -246,19 +244,39 @@
       padding-bottom: 16px;
     }
 
-    /* Combine panel */
+    /* Combine panel (sequence-by-click) */
     #combinePanel { display: none; }
     #combinePanel.show { display: flex; }
-    #combinePanel label {
-      display: flex;
-      align-items: center;
-      gap: 6px;
+    .seq-btn {
+      position: relative;
       background: #1a1a1a;
-      padding: 6px 8px;
-      border-radius: 8px;
       border: 1px solid #333;
-      font-size: 12px;
+      border-radius: 10px;
+      padding: 6px 10px;
+      font-size: 13px;
+      min-width: 46px;
     }
+    .seq-btn.active {
+      border-color: #0a84ff;
+      box-shadow: 0 0 0 1px #0a84ff inset;
+    }
+    .seq-badge {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      background: #0a84ff;
+      color: #fff;
+      width: 18px;
+      height: 18px;
+      font-size: 11px;
+      border-radius: 50%;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+    .seq-btn.active .seq-badge { display: flex; }
+
     #combineHelp {
       width: 100%;
       text-align: center;
@@ -329,9 +347,9 @@
     <!-- Inline rename panel (A–J) -->
     <div id="namesPanel" class="names-panel" aria-label="Rename lists"></div>
 
-    <!-- Combine panel (A–J) -->
-    <div id="combinePanel" class="combine-panel" aria-label="Select lists for pool"></div>
-    <div id="combineHelp">Combine mode: picks one item from <u>each</u> selected list in A→J order and joins them (no + signs).</div>
+    <!-- Combine sequence panel (tap to set order) -->
+    <div id="combinePanel" class="combine-panel" aria-label="Select lists for sequence"></div>
+    <div id="combineHelp">Tap lists to set the <u>sequence</u> (1,2,3…). Prompt = one random from each, joined with spaces.</div>
 
     <button id="editBtn" onclick="openModal()">✏️ Edit Current List</button>
 
@@ -385,7 +403,6 @@
 
   <main id="tapArea" aria-label="Tap anywhere for next prompt">
     <div id="output">Your prompt will appear here.</div>
-    <div id="sourceTag" aria-live="polite"></div>
   </main>
 
   <!-- Modal -->
@@ -417,24 +434,11 @@
     let rate = 1.0;   // 0.6..1.6
 
     let combineMode = false;
-    let combineSelection = new Set(); // letters selected for combine pool
+    // sequence of letters in chosen order
+    let combineSequence = []; // e.g., ["A","C","D"]
 
     let voicePool = [];                 // up to 5 English voices
     let randomVoicePerPrompt = false;   // toggle
-
-    // Fixed colors for single-source tag (kept for backwards compatibility)
-    const SOURCE_COLORS = {
-      A: { bg: '#2ecc71', border: '#27ae60', text: '#000' },
-      B: { bg: '#3498db', border: '#2980b9', text: '#fff' },
-      C: { bg: '#e67e22', border: '#d35400', text: '#000' },
-      D: { bg: '#9b59b6', border: '#8e44ad', text: '#fff' },
-      E: { bg: '#e74c3c', border: '#c0392b', text: '#fff' },
-      F: { bg: '#1abc9c', border: '#16a085', text: '#000' },
-      G: { bg: '#f1c40f', border: '#f39c12', text: '#000' },
-      H: { bg: '#34495e', border: '#2c3e50', text: '#fff' },
-      I: { bg: '#ff6b6b', border: '#e05656', text: '#000' },
-      J: { bg: '#7f8c8d', border: '#666f70', text: '#fff' }
-    };
 
     // ===== Elements =====
     const volBtn = document.getElementById('volBtn');
@@ -457,7 +461,7 @@
     const listButtons = document.getElementById('listButtons');
     const namesPanel = document.getElementById('namesPanel');
     const combinePanel = document.getElementById('combinePanel');
-    const sourceTag = document.getElementById('sourceTag');
+    const output = document.getElementById('output');
 
     const importBtn = document.getElementById('importBtn');
     const exportBtn = document.getElementById('exportBtn');
@@ -474,6 +478,7 @@
         listButtons.appendChild(b);
       });
     }
+
     function buildNamesPanel() {
       namesPanel.innerHTML = '';
       LETTERS.forEach(l => {
@@ -489,15 +494,27 @@
         namesPanel.appendChild(label);
       });
     }
+
+    // Sequence selection buttons
     function buildCombinePanel() {
       combinePanel.innerHTML = '';
       LETTERS.forEach(l => {
-        const lab = document.createElement('label');
-        lab.innerHTML = `<input type="checkbox" value="${l}"> ${l}`;
-        const cb = lab.querySelector('input');
-        cb.addEventListener('change', () => toggleCombineList(cb));
-        combinePanel.appendChild(lab);
+        const btn = document.createElement('button');
+        btn.className = 'seq-btn';
+        btn.dataset.letter = l;
+        btn.id = 'seq_' + l;
+        btn.textContent = l;
+        const badge = document.createElement('div');
+        badge.className = 'seq-badge';
+        badge.textContent = '';
+        btn.appendChild(badge);
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleSeqLetter(l);
+        });
+        combinePanel.appendChild(btn);
       });
+      refreshSequenceBadges();
     }
 
     // ===== Init / Load =====
@@ -521,11 +538,16 @@
         const storedNames = JSON.parse(localStorage.getItem('promptListNames') || '{}');
         names = { ...defaultNames, ...storedNames };
       } catch(e){ names = { ...defaultNames }; }
-      // combine selection
+      // sequence
       try {
-        const savedSel = JSON.parse(localStorage.getItem('combineSelection') || '[]');
-        combineSelection = new Set(savedSel.filter(x => LETTERS.includes(x)));
-      } catch(e){ combineSelection = new Set(); }
+        const savedSeq = JSON.parse(localStorage.getItem('combineSequence') || '[]');
+        combineSequence = savedSeq.filter(x => LETTERS.includes(x));
+        // Back-compat: if old selection array exists and no sequence yet, use alphabetical
+        if ((!combineSequence || combineSequence.length === 0) && localStorage.getItem('combineSelection')) {
+          const oldSel = JSON.parse(localStorage.getItem('combineSelection') || '[]').filter(x => LETTERS.includes(x));
+          combineSequence = oldSel.sort((a,b)=>LETTERS.indexOf(a)-LETTERS.indexOf(b));
+        }
+      } catch(e){ combineSequence = []; }
 
       updateListButtons();
       updateNameInputs();
@@ -533,9 +555,9 @@
       updateAutoButton();
       updateVolumeUI();
       updateRateUI();
-      updateCombineUI();
       updateVoiceButtonUI();
       updateAudioStatus();
+      refreshSequenceBadges();
 
       // default highlight for timing 10–20
       highlightTimerButton('timeBtn10');
@@ -571,6 +593,35 @@
       nameSaveTimer = setTimeout(saveNames, 200);
     }
 
+    // ===== Sequence selection logic =====
+    function toggleSeqLetter(letter) {
+      const idx = combineSequence.indexOf(letter);
+      if (idx >= 0) {
+        combineSequence.splice(idx, 1);
+      } else {
+        combineSequence.push(letter);
+      }
+      localStorage.setItem('combineSequence', JSON.stringify(combineSequence));
+      refreshSequenceBadges();
+      generatePrompt();
+    }
+
+    function refreshSequenceBadges() {
+      LETTERS.forEach(l => {
+        const btn = document.getElementById('seq_' + l);
+        if (!btn) return;
+        const badge = btn.querySelector('.seq-badge');
+        const idx = combineSequence.indexOf(l);
+        if (idx >= 0) {
+          btn.classList.add('active');
+          badge.textContent = String(idx + 1);
+        } else {
+          btn.classList.remove('active');
+          badge.textContent = '';
+        }
+      });
+    }
+
     // ===== List switching / editing =====
     function switchList(letter) {
       currentList = letter;
@@ -598,60 +649,34 @@
     function randFrom(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
     function getRandomFrom(letter) {
       const list = lists[letter] || [];
-      return list.length === 0 ? `[No items in ${getListName(letter)}]` : randFrom(list);
-    }
-
-    function setTagNeutral() {
-      sourceTag.style.background = '#1a1a1a';
-      sourceTag.style.borderColor = '#333';
-      sourceTag.style.color = '#fff';
-    }
-    function setTagColorForSingle(letter) {
-      const c = SOURCE_COLORS[letter] || { bg:'#1a1a1a', border:'#333', text:'#fff' };
-      sourceTag.style.background = c.bg;
-      sourceTag.style.borderColor = c.border;
-      sourceTag.style.color = c.text;
-    }
-
-    function showSourceTagForLetters(letters) {
-      if (!letters || letters.length === 0) { sourceTag.style.display = 'none'; return; }
-      if (letters.length === 1) {
-        setTagColorForSingle(letters[0]);
-        sourceTag.textContent = `from: ${getListName(letters[0])} (${letters[0]})`;
-      } else {
-        setTagNeutral();
-        sourceTag.textContent = 'from: ' + letters.map(l => `${getListName(l)} (${l})`).join(' · ');
-      }
-      sourceTag.style.display = 'inline-block';
+      return list.length === 0 ? null : randFrom(list);
     }
 
     function generatePrompt() {
-      let text;
-      if (combineMode && combineSelection.size > 0) {
-        // Sort selected letters in canonical A->J order
-        const letters = Array.from(combineSelection)
-          .filter(l => LETTERS.includes(l))
-          .sort((a,b) => LETTERS.indexOf(a) - LETTERS.indexOf(b));
-
-        const usable = letters.filter(l => (lists[l] || []).length > 0);
-        if (!usable.length) {
-          text = "No prompts in selected lists";
-          document.getElementById('output').textContent = text;
-          sourceTag.style.display = 'none';
-        } else {
-          const parts = usable.map(l => getRandomFrom(l));
-          text = parts.join(' ');                 // <-- join with spaces, no plus signs
-          document.getElementById('output').textContent = text;
-          showSourceTagForLetters(usable);
-        }
+      let text = '';
+      if (combineMode && combineSequence.length > 0) {
+        const parts = [];
+        combineSequence.forEach(l => {
+          const item = getRandomFrom(l);
+          if (item !== null) {
+            // color-coded span per list
+            parts.push(`<span class="w${l}">${escapeHtml(item)}</span>`);
+          }
+        });
+        if (parts.length === 0) text = 'No prompts in selected lists';
+        else text = parts.join(' ');
+        output.innerHTML = text;
       } else {
-        // Single-list mode
-        text = getRandomFrom(currentList);
-        document.getElementById('output').textContent = text;
-        showSourceTagForLetters([currentList]);   // colored pill for single list
+        const item = getRandomFrom(currentList);
+        output.innerHTML = item ? `<span class="w${currentList}">${escapeHtml(item)}</span>` : `[No items in ${getListName(currentList)}]`;
       }
 
-      if (soundOn) speak(text);
+      const spoken = output.textContent; // voice reads plain text only
+      if (soundOn) speak(spoken);
+    }
+
+    function escapeHtml(s){
+      return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
 
     // ===== Timer + active highlight =====
@@ -806,21 +831,8 @@
     function toggleCombine() {
       combineMode = !combineMode;
       localStorage.setItem('combineMode', combineMode);
-      updateCombineUI();
-      generatePrompt();
-    }
-    function updateCombineUI() {
       document.getElementById('combineToggle').textContent = combineMode ? "🔗 Combine: ON" : "🔗 Combine: OFF";
       combinePanel.classList.toggle('show', combineMode);
-      combinePanel.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-        cb.checked = combineSelection.has(cb.value);
-      });
-      if (!combineMode) sourceTag.style.display = 'none';
-    }
-    function toggleCombineList(cb) {
-      if (cb.checked) combineSelection.add(cb.value);
-      else combineSelection.delete(cb.value);
-      localStorage.setItem('combineSelection', JSON.stringify(Array.from(combineSelection)));
       generatePrompt();
     }
 
@@ -883,12 +895,12 @@
     // ===== Export / Import JSON =====
     exportBtn.addEventListener('click', () => {
       const data = {
-        version: 'pg-10lists-v04',
+        version: 'pg-10lists-seq-v04',
         lists,
         names,
         settings: {
           soundOn, autoPlay, volume, rate,
-          combineMode, combineSelection: Array.from(combineSelection),
+          combineMode, combineSequence,
           randomVoicePerPrompt
         }
       };
@@ -930,17 +942,23 @@
           volume = Math.max(0, Math.min(1, +s.volume || 1));
           rate = Math.max(0.6, Math.min(1.6, +s.rate || 1));
           combineMode = !!s.combineMode;
-          combineSelection = new Set((s.combineSelection || []).filter(x => LETTERS.includes(x)));
+          // prefer sequence; fallback to selection
+          if (Array.isArray(s.combineSequence)) {
+            combineSequence = s.combineSequence.filter(x => LETTERS.includes(x));
+          } else if (Array.isArray(s.combineSelection)) {
+            combineSequence = s.combineSelection.filter(x => LETTERS.includes(x))
+              .sort((a,b)=>LETTERS.indexOf(a)-LETTERS.indexOf(b));
+          }
           randomVoicePerPrompt = !!s.randomVoicePerPrompt;
         }
 
-        // refresh UI + persist toggles
+        // persist
         localStorage.setItem('soundOn', soundOn);
         localStorage.setItem('autoPlay', autoPlay);
         localStorage.setItem('volume', volume.toFixed(3));
         localStorage.setItem('rate', rate.toFixed(3));
         localStorage.setItem('combineMode', combineMode);
-        localStorage.setItem('combineSelection', JSON.stringify(Array.from(combineSelection)));
+        localStorage.setItem('combineSequence', JSON.stringify(combineSequence));
         localStorage.setItem('randomVoicePerPrompt', randomVoicePerPrompt);
 
         updateListButtons();
@@ -949,9 +967,9 @@
         updateAutoButton();
         updateVolumeUI();
         updateRateUI();
-        updateCombineUI();
         updateVoiceButtonUI();
         updateAudioStatus();
+        refreshSequenceBadges();
         switchList(currentList);
 
         alert('Import complete ✅');
