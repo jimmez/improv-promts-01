@@ -1,1 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Prompt Generator — End of App 4</title>
+  <style>
+    :root{
+      --bg:#0f1220; --panel:#171a2a; --ink:#eef1ff; --muted:#a7b0d8; --accent:#6ea8fe; --accent-2:#a58bff;
+      --ok:#23c281; --warn:#f2c94c; --danger:#ff6b6b; --border:rgba(255,255,255,.08);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:radial-gradient(1200px 800px at 10% -10%,#1b2040 0%,#0f1220 50%,#0b0e19 100%);color:var(--ink);font:16px/1.5 system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
+    .wrap{max-width:1100px;margin:40px auto;padding:0 16px}
+    header{display:flex;align-items:center;gap:16px;margin-bottom:16px}
+    header h1{font-size:20px;margin:0;font-weight:700;letter-spacing:.3px}
+    .tag{padding:2px 8px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:12px}
+    .stamp{margin-left:auto;color:var(--muted);font-size:12px}
+    .grid{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}
 
+    .card{background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.02));border:1px solid var(--border);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.3);}
+    .card h2{margin:0;padding:14px 16px;border-bottom:1px solid var(--border);font-size:15px;color:var(--muted)}
+    .card .body{padding:16px}
+
+    .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+    .tab{padding:8px 12px;border:1px solid var(--border);border-radius:12px;background:var(--panel);color:var(--muted);cursor:pointer;user-select:none}
+    .tab.active{color:var(--ink);border-color:transparent;background:linear-gradient(180deg,#2a2f4a,#1b2037)}
+
+    textarea{width:100%;min-height:180px;max-height:420px;resize:vertical;background:#0f1328;color:var(--ink);border:1px solid var(--border);border-radius:12px;padding:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
+    .muted{color:var(--muted)}
+
+    .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    .row + .row{margin-top:10px}
+
+    .btn{padding:10px 14px;border-radius:12px;border:1px solid var(--border);background:linear-gradient(180deg,#293051,#1b2242);color:var(--ink);cursor:pointer}
+    .btn:active{transform:translateY(1px)}
+    .btn.primary{background:linear-gradient(180deg,#6ea8fe,#4c7ef9);border:none}
+    .btn.ghost{background:transparent}
+    .btn.warn{background:linear-gradient(180deg,#f7d774,#eab308);border:none;color:#0b0e19}
+    .btn.danger{background:linear-gradient(180deg,#ff8c8c,#ff6b6b);border:none}
+
+    .checks{display:flex;flex-wrap:wrap;gap:10px}
+    .chip{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:999px;background:var(--panel)}
+    .chip input{accent-color:var(--accent)}
+
+    .output{padding:14px 16px;border:1px dashed var(--border);border-radius:12px;background:rgba(255,255,255,.03);min-height:48px}
+
+    .timer{display:flex;flex-direction:column;gap:12px}
+    .presets{display:flex;flex-wrap:wrap;gap:8px}
+    .preset{padding:8px 12px;border-radius:12px;border:1px solid var(--border);background:var(--panel);cursor:pointer}
+    .preset.active{outline:2px solid var(--accent);}
+    .progress{height:10px;background:#0e1330;border-radius:999px;overflow:hidden;border:1px solid var(--border)}
+    .bar{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent-2))}
+
+    .small{font-size:12px;color:var(--muted)}
+    .spacer{height:8px}
+
+    @media (max-width: 900px){
+      .grid{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Prompt Generator</h1>
+      <span class="tag">End of App – 4</span>
+      <div class="stamp">Jimmy James - 09.08.2025 - 14:43</div>
+    </header>
+
+    <div class="grid">
+      <!-- Left: List editor -->
+      <section class="card" id="listsCard">
+        <h2>Edit lists (auto-saved)</h2>
+        <div class="body">
+          <div class="tabs" id="tabs"></div>
+          <textarea id="listEditor" spellcheck="false" placeholder="One item per line..."></textarea>
+          <div class="row small"><span>Tip: one item per line. Empty lines ignored.</span></div>
+          <div class="row">
+            <button class="btn" id="importBtn">Import (CSV/lines)</button>
+            <button class="btn ghost" id="exportBtn">Export</button>
+            <button class="btn danger" id="clearListBtn">Clear current list</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right: Build + Timer -->
+      <section class="card">
+        <h2>Build prompt from selected lists</h2>
+        <div class="body">
+          <div class="checks" id="checks"></div>
+          <div class="row">
+            <button class="btn primary" id="generateBtn">Generate</button>
+            <button class="btn" id="copyBtn">Copy</button>
+            <span class="small" id="status"></span>
+          </div>
+          <div class="spacer"></div>
+          <div class="output" id="output"></div>
+        </div>
+      </section>
+    </div>
+
+    <div class="spacer" style="height:16px"></div>
+
+    <section class="card">
+      <h2>Timer</h2>
+      <div class="body timer">
+        <div class="presets" id="presets"></div>
+        <div class="row">
+          <label class="chip">
+            <span>Custom seconds</span>
+            <input type="number" id="customSec" min="1" step="1" style="width:100px;background:#0f1328;color:var(--ink);border:1px solid var(--border);border-radius:8px;padding:6px" />
+            <button class="btn" id="useCustom">Use</button>
+          </label>
+          <button class="btn warn" id="startTimer">Start</button>
+          <button class="btn" id="stopTimer">Stop</button>
+          <span class="small" id="timerReadout">Ready</span>
+        </div>
+        <div class="progress"><div class="bar" id="bar"></div></div>
+      </div>
+    </section>
+  </div>
+
+  <audio id="ding">
+    <source src="data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQAA" type="audio/mp3">
+  </audio>
+
+  <script>
+    // ====== Storage helpers ======
+    const storage = {
+      get(key, fallback){ try{ const v = localStorage.getItem(key); return v===null? fallback : JSON.parse(v);}catch{return fallback} },
+      set(key, val){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch{} }
+    };
+
+    // ====== Lists setup ======
+    const listKeys = ["a","b","c","d","e"];
+    const defaults = {
+      a:["red","blue","green"],
+      b:["cat","dog","owl"],
+      c:["jumps","slides","twirls"],
+      d:["quickly","softly","boldly"],
+      e:["today","tomorrow","tonight"]
+    };
+
+    const lists = {};
+    listKeys.forEach(k=>{ lists[k] = storage.get("list_"+k, defaults[k]); });
+
+    let active = "a";
+
+    const tabs = document.getElementById('tabs');
+    const editor = document.getElementById('listEditor');
+    const checks = document.getElementById('checks');
+    const output = document.getElementById('output');
+    const status = document.getElementById('status');
+
+    // Build tabs
+    function renderTabs(){
+      tabs.innerHTML = '';
+      listKeys.forEach(k=>{
+        const b = document.createElement('button');
+        b.className = 'tab'+(active===k?' active':'');
+        b.textContent = 'List '+k.toUpperCase();
+        b.onclick = ()=>{ active=k; renderTabs(); loadEditor(); };
+        tabs.appendChild(b);
+      });
+    }
+
+    function loadEditor(){
+      editor.value = (lists[active]||[]).join('\n');
+    }
+
+    function saveActiveFromEditor(){
+      const lines = editor.value\
+        .split(/\n|,/g)\
+        .map(s=>s.trim())\
+        .filter(Boolean);
+      lists[active] = lines;
+      storage.set('list_'+active, lines);
+      flash(`Saved ${lines.length} items to list ${active.toUpperCase()}`);
+      renderChecks();
+    }
+
+    editor.addEventListener('input', debounce(saveActiveFromEditor, 400));
+
+    // Import/Export/Clear
+    document.getElementById('importBtn').onclick = ()=>{
+      const txt = prompt('Paste items (comma or newline separated):');
+      if (txt!==null){
+        editor.value = txt; saveActiveFromEditor();
+      }
+    };
+    document.getElementById('exportBtn').onclick = ()=>{
+      const blob = new Blob([lists[active].join('\n')], {type:'text/plain'});
+      const url = URL.createObjectURL(blob);
+      const a = Object.assign(document.createElement('a'),{href:url,download:`list-${active}.txt`});
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    };
+    document.getElementById('clearListBtn').onclick = ()=>{
+      if (confirm(`Clear all items in list ${active.toUpperCase()}?`)){
+        lists[active] = []; storage.set('list_'+active, []); loadEditor(); renderChecks();
+      }
+    };
+
+    // Build selection chips
+    function renderChecks(){
+      checks.innerHTML = '';
+      listKeys.forEach(k=>{
+        const id = 'chk_'+k;
+        const wrap = document.createElement('label');
+        wrap.className = 'chip';
+        wrap.innerHTML = `<input type="checkbox" id="${id}"> <span>List ${k.toUpperCase()} <span class="small">(${(lists[k]||[]).length})</span></span>`;
+        checks.appendChild(wrap);
+        const saved = storage.get('sel_'+k, false);
+        document.getElementById(id).checked = !!saved;
+        document.getElementById(id).addEventListener('change', (e)=>{
+          storage.set('sel_'+k, e.target.checked);
+        });
+      });
+    }
+
+    // Generate prompt from selected lists (one random word from each selected list), join with spaces
+    function rand(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+    function generate(){
+      const chosen = [];
+      listKeys.forEach(k=>{
+        if (storage.get('sel_'+k, false)){
+          const items = (lists[k]||[]).filter(Boolean);
+          if (items.length>0){ chosen.push(rand(items)); }
+        }
+      });
+      if (chosen.length===0){ flash('Select at least one list with items.'); return; }
+      const prompt = chosen.join(' '); // no plus signs
+      output.textContent = prompt;
+      storage.set('last_prompt', prompt);
+      flash('Generated');
+    }
+
+    document.getElementById('generateBtn').onclick = generate;
+    document.getElementById('copyBtn').onclick = async()=>{
+      const text = output.textContent.trim();
+      if (!text){ flash('Nothing to copy'); return; }
+      try{ await navigator.clipboard.writeText(text); flash('Copied'); }catch{ flash('Copy failed'); }
+    };
+
+    // Restore last prompt
+    const last = storage.get('last_prompt','');
+    if (last) output.textContent = last;
+
+    // ====== Timer ======
+    const presets = [
+      { id:'p1', label:'10–20s', min:10, max:20 },
+      { id:'p2', label:'30–60s', min:30, max:60 },
+      { id:'p3', label:'90–120s', min:90, max:120 },
+      { id:'p4', label:'150–300s', min:150, max:300 },
+    ];
+    const presetsEl = document.getElementById('presets');
+    let activePreset = storage.get('activePreset','p1');
+    let customSeconds = storage.get('customSeconds', 0);
+
+    function renderPresets(){
+      presetsEl.innerHTML = '';
+      presets.forEach(p=>{
+        const b = document.createElement('button');
+        b.className = 'preset'+(activePreset===p.id?' active':'');
+        b.textContent = p.label;
+        b.onclick = ()=>{ activePreset=p.id; storage.set('activePreset', activePreset); renderPresets(); };
+        presetsEl.appendChild(b);
+      });
+    }
+
+    document.getElementById('useCustom').onclick = ()=>{
+      const v = parseInt(document.getElementById('customSec').value,10);
+      if (!isFinite(v) || v<=0){ flash('Enter a positive number'); return; }
+      customSeconds = v; storage.set('customSeconds', v); activePreset='custom'; storage.set('activePreset','custom'); renderPresets(); flash('Custom set');
+    };
+
+    document.getElementById('customSec').value = customSeconds||'';
+
+    let timerId=null, startTime=0, total=0;
+    const bar = document.getElementById('bar');
+    const readout = document.getElementById('timerReadout');
+    const ding = document.getElementById('ding');
+
+    function pickDuration(){
+      if (activePreset==='custom') return customSeconds || 0;
+      const p = presets.find(x=>x.id===activePreset) || presets[0];
+      return p.min + Math.floor(Math.random()*((p.max - p.min)+1));
+    }
+
+    function start(){
+      const secs = pickDuration();
+      if (!secs){ flash('Set a custom time or choose a preset'); return; }
+      clearInterval(timerId);
+      startTime = Date.now(); total = secs;
+      updateReadout(secs);
+      bar.style.width = '0%';
+      timerId = setInterval(()=>{
+        const elapsed = Math.floor((Date.now()-startTime)/1000);
+        const remain = Math.max(0, total - elapsed);
+        updateReadout(remain);
+        const pct = Math.min(100, (elapsed/total)*100);
+        bar.style.width = pct+'%';
+        if (remain<=0){
+          clearInterval(timerId); timerId=null; try{ ding.currentTime=0; ding.play(); }catch{};
+          flash('Time!');
+        }
+      }, 200);
+    }
+
+    function stop(){ clearInterval(timerId); timerId=null; flash('Stopped'); }
+
+    function updateReadout(sec){
+      const m = Math.floor(sec/60), s = sec%60;
+      readout.textContent = `${m}:${String(s).padStart(2,'0')} remaining`;
+    }
+
+    document.getElementById('startTimer').onclick = start;
+    document.getElementById('stopTimer').onclick = stop;
+
+    // ====== Utils & boot ======
+    function flash(msg){ status.textContent = msg; setTimeout(()=>status.textContent='', 1200); }
+    function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; }
+
+    // Initial render
+    renderTabs();
+    loadEditor();
+    renderChecks();
+    renderPresets();
+  </script>
+</body>
+</html>
