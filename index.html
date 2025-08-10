@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -691,4 +692,313 @@
           const item = getRandomFrom(l);
           if (item !== null) parts.push(`<span class="w${l}">${escapeHtml(item)}</span>`);
         });
-        html =
+        html = parts.length ? parts.join(' ') : 'No prompts in selected lists';
+      } else {
+        const item = getRandomFrom(currentList);
+        html = item ? `<span class="w${currentList}">${escapeHtml(item)}</span>` : `[No items in ${escapeHtml(getListName(currentList))}]`;
+      }
+      output.innerHTML = html;
+
+      const spoken = output.textContent; // voice reads plain text only
+      if (soundOn) speak(spoken);
+    }
+
+    function escapeHtml(s){
+      return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    // ===== Timer + active highlight =====
+    function highlightTimerButton(id) {
+      document.querySelectorAll('.timing-buttons button, .custom-time button')
+        .forEach(b => b.classList.remove('active'));
+      const btn = document.getElementById(id);
+      if (btn) btn.classList.add('active');
+    }
+    function setTimerPreset(min, max, btnId) {
+      minTime = min; maxTime = max;
+      highlightTimerButton(btnId);
+      if (autoPlay) startTimer();
+    }
+    function applyCustomTime() {
+      const min = parseInt(document.getElementById('minCustom').value, 10);
+      const max = parseInt(document.getElementById('maxCustom').value, 10);
+      if (min > 0 && max >= min) {
+        minTime = min; maxTime = max;
+        highlightTimerButton('customBtn');
+        if (autoPlay) startTimer();
+      }
+    }
+    function startTimer() {
+      if (timer) clearTimeout(timer);
+      const delay = Math.floor(Math.random() * (maxTime - minTime + 1) + minTime) * 1000;
+      timer = setTimeout(() => {
+        generatePrompt();
+        if (autoPlay) startTimer();
+      }, delay);
+    }
+
+    // ===== Sound / Speech =====
+    function toggleSound() {
+      soundOn = !soundOn;
+      localStorage.setItem('soundOn', soundOn);
+      updateSoundButton();
+    }
+    function updateSoundButton() {
+      document.getElementById('soundToggle').textContent = soundOn ? "🔊 Sound: ON" : "🔇 Sound: OFF";
+    }
+
+    function speak(text) {
+      try {
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'en-US';
+        u.volume = volume;
+        u.rate = rate;
+
+        const all = window.speechSynthesis.getVoices();
+        if (randomVoicePerPrompt && voicePool.length) {
+          const chosen = randFrom(voicePool);
+          const match = all.find(v => v.name === chosen.name);
+          if (match) u.voice = match;
+        } else {
+          const v = all.find(v => (v.lang||'').toLowerCase().startsWith('en'));
+          if (v) u.voice = v;
+        }
+
+        speechSynthesis.cancel();
+        speechSynthesis.speak(u);
+      } catch(e) { /* ignore */ }
+    }
+
+    function toggleAuto() {
+      autoPlay = !autoPlay;
+      localStorage.setItem('autoPlay', autoPlay);
+      updateAutoButton();
+      if (autoPlay) startTimer(); else if (timer) clearTimeout(timer);
+    }
+    function updateAutoButton() {
+      document.getElementById('autoToggle').textContent = autoPlay ? "⏸ Auto: ON" : "▶️ Auto: OFF";
+    }
+
+    // ===== Volume & Rate =====
+    function updateAudioStatus() {
+      const pct = Math.round(volume * 100);
+      audioStatus.textContent = `Vol ${pct}% • ${rate.toFixed(2)}×`;
+    }
+    function updateVolumeUI() {
+      const h = volSlider.clientHeight - 12;
+      volFill.style.height = Math.round(volume * h) + 'px';
+      volThumb.style.transform = `translateY(${-(volume * h)}px)`;
+      volReadout.textContent = 'Volume: ' + Math.round(volume*100) + '%';
+      updateAudioStatus();
+    }
+    function setVolumeFromY(clientY) {
+      const r = volSlider.getBoundingClientRect();
+      const y = clientY - r.top - 6;
+      const h = r.height - 12;
+      let v = 1 - (y / h);
+      v = Math.max(0, Math.min(1, v));
+      if (Math.abs(v - volume) > 0.001) {
+        volume = v;
+        localStorage.setItem('volume', volume.toFixed(3));
+        updateVolumeUI();
+      }
+    }
+    let draggingVol = false;
+    volSlider.addEventListener('pointerdown', (e) => {
+      draggingVol = true;
+      volSlider.setPointerCapture(e.pointerId);
+      setVolumeFromY(e.clientY);
+      e.stopPropagation();
+    });
+    volSlider.addEventListener('pointermove', (e) => { if (draggingVol) setVolumeFromY(e.clientY); e.stopPropagation(); });
+    volSlider.addEventListener('pointerup', (e) => { draggingVol = false; volSlider.releasePointerCapture(e.pointerId); e.stopPropagation(); });
+
+    function updateRateUI() {
+      const h = rateSlider.clientHeight - 12;
+      const t = (rate - 0.6) / (1.6 - 0.6); // 0..1
+      rateFill.style.height = Math.round(t * h) + 'px';
+      rateThumb.style.transform = `translateY(${-(t * h)}px)`;
+      rateReadout.textContent = 'Rate: ' + rate.toFixed(2) + '×';
+      updateAudioStatus();
+    }
+    function setRateFromY(clientY) {
+      const r = rateSlider.getBoundingClientRect();
+      const y = clientY - r.top - 6;
+      const h = r.height - 12;
+      let t = 1 - (y / h);
+      t = Math.max(0, Math.min(1, t));
+      const newRate = 0.6 + t * (1.6 - 0.6);
+      if (Math.abs(newRate - rate) > 0.005) {
+        rate = newRate;
+        localStorage.setItem('rate', rate.toFixed(3));
+        updateRateUI();
+      }
+    }
+    let draggingRate = false;
+    rateSlider.addEventListener('pointerdown', (e) => {
+      draggingRate = true;
+      rateSlider.setPointerCapture(e.pointerId);
+      setRateFromY(e.clientY);
+      e.stopPropagation();
+    });
+    rateSlider.addEventListener('pointermove', (e) => { if (draggingRate) setRateFromY(e.clientY); e.stopPropagation(); });
+    rateSlider.addEventListener('pointerup', (e) => { draggingRate = false; rateSlider.releasePointerCapture(e.pointerId); e.stopPropagation(); });
+
+    // ===== Panels / Toggles =====
+    function toggleVolPanel() {
+      const open = volPanel.classList.toggle('show');
+      volBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    volBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleVolPanel(); });
+    document.addEventListener('click', (e) => {
+      if (!volPanel.classList.contains('show')) return;
+      const within = e.target.closest('#volPanel') || e.target.closest('#volBtn');
+      if (!within) volPanel.classList.remove('show');
+    });
+
+    function toggleNames() { namesPanel.classList.toggle('show'); }
+
+    // Random voice per prompt
+    function updateVoiceButtonUI(){
+      voiceBtn.textContent = randomVoicePerPrompt ? "🎲 Voice: ON" : "🎲 Voice: OFF";
+      voiceBtn.title = "Random voice per prompt: " + (randomVoicePerPrompt ? "ON" : "OFF");
+      voiceReadout.textContent = "Voice: " + (randomVoicePerPrompt ? "(random pool)" : "(fixed/auto)");
+    }
+    voiceBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      randomVoicePerPrompt = !randomVoicePerPrompt;
+      localStorage.setItem('randomVoicePerPrompt', randomVoicePerPrompt);
+      updateVoiceButtonUI();
+      if (!voicePool.length) setupVoices();
+    });
+
+    // ===== Key/click to advance =====
+    document.body.addEventListener('click', (e) => {
+      if (e.target.closest('.controls') || e.target.closest('#volPanel') || e.target.closest('#modal')) return;
+      generatePrompt();
+    });
+    window.addEventListener('keydown', () => {
+      if (document.getElementById('modal').style.display === 'flex') return;
+      generatePrompt();
+    });
+
+    // ===== Voices handling =====
+    function setupVoices() {
+      function buildPool(all) {
+        const en = all.filter(v => (v.lang || '').toLowerCase().startsWith('en'));
+        const picks = [];
+        function addUnique(list) {
+          for (const v of list) {
+            if (picks.length >= 5) break;
+            if (!picks.find(p=>p.name===v.name)) picks.push(v);
+          }
+        }
+        const female = en.filter(v => /female/i.test(v.name));
+        const male   = en.filter(v => /male/i.test(v.name));
+        const us     = en.filter(v => /us/i.test(v.lang) || /US/i.test(v.name));
+        const uk     = en.filter(v => /gb|uk/i.test(v.lang) || /UK|English UK/i.test(v.name));
+        addUnique([...(female||[]), ...(male||[]), ...(us||[]), ...(uk||[])]);
+        addUnique(en);
+        if (!picks.length) addUnique(all);
+        return picks.slice(0,5);
+      }
+      function refresh() {
+        const all = window.speechSynthesis.getVoices();
+        if (!all || all.length === 0) return;
+        voicePool = buildPool(all);
+        updateVoiceButtonUI();
+      }
+      window.speechSynthesis.onvoiceschanged = refresh;
+      refresh();
+    }
+
+    // ===== Export / Import JSON =====
+    exportBtn.addEventListener('click', () => {
+      const data = {
+        version: 'pg-10lists-seq-v04',
+        lists,
+        names,
+        settings: {
+          soundOn, autoPlay, volume, rate,
+          combineSequence,
+          randomVoicePerPrompt
+        }
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'prompt-generator-backup.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    });
+
+    importBtn.addEventListener('click', () => importFile.click());
+    importFile.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+
+        if (!data || typeof data !== 'object') throw new Error('Invalid file');
+
+        if (data.lists && typeof data.lists === 'object') {
+          LETTERS.forEach(l => { lists[l] = Array.isArray(data.lists[l]) ? data.lists[l] : []; });
+          LETTERS.forEach(l => localStorage.setItem('promptList_' + l, JSON.stringify(lists[l])));
+        }
+        if (data.names && typeof data.names === 'object') {
+          names = { ...defaultNames, ...data.names };
+          localStorage.setItem('promptListNames', JSON.stringify(names));
+        }
+        if (data.settings) {
+          const s = data.settings;
+          soundOn = !!s.soundOn;
+          autoPlay = !!s.autoPlay;
+          volume = Math.max(0, Math.min(1, +s.volume || 1));
+          rate = Math.max(0.6, Math.min(1.6, +s.rate || 1));
+          if (Array.isArray(s.combineSequence)) {
+            combineSequence = s.combineSequence.filter(x => LETTERS.includes(x));
+          }
+          randomVoicePerPrompt = !!s.randomVoicePerPrompt;
+        }
+
+        // persist
+        localStorage.setItem('soundOn', soundOn);
+        localStorage.setItem('autoPlay', autoPlay);
+        localStorage.setItem('volume', volume.toFixed(3));
+        localStorage.setItem('rate', rate.toFixed(3));
+        localStorage.setItem('combineSequence', JSON.stringify(combineSequence));
+        localStorage.setItem('randomVoicePerPrompt', randomVoicePerPrompt);
+
+        updateListButtonsTexts();
+        updateNameInputs();
+        updateSoundButton();
+        updateAutoButton();
+        updateVolumeUI();
+        updateRateUI();
+        updateVoiceButtonUI();
+        updateAudioStatus();
+        refreshSequenceBadges();
+        switchList(currentList);
+
+        alert('Import complete ✅');
+      } catch (err) {
+        console.error(err);
+        alert('Import failed. Please select a valid JSON backup file.');
+      } finally {
+        importFile.value = '';
+      }
+    });
+
+    // ===== Boot =====
+    buildListButtons();
+    buildNamesPanel();
+    buildSequencePanel();
+    loadSettings();
+    switchList('A');
+  </script>
+</body>
+</html>
