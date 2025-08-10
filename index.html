@@ -123,7 +123,7 @@
   </div>
 
   <audio id="ding">
-    <source src="data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQAA" type="audio/mp3">
+    <source src="data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGlinZwAAAA8AAAACAAACcQAA" type="audio/mp3">
   </audio>
 
   <script>
@@ -171,9 +171,9 @@
     }
 
     function saveActiveFromEditor(){
-      const lines = editor.value\
-        .split(/\n|,/g)\
-        .map(s=>s.trim())\
+      const lines = editor.value
+        .split(/\n|,/g)
+        .map(s=>s.trim())
         .filter(Boolean);
       lists[active] = lines;
       storage.set('list_'+active, lines);
